@@ -34,6 +34,10 @@ $ time ./calculate_average_baseline.sh > /dev/null
 
 $ time ./calculate_average_thomaswue.sh > /dev/null  
 0,23s user 0,17s system 0% cpu 1:02,58 total
+
+$ time ./calculate_average_AlexanderYastrebov.sh > /dev/null  
+167,48s user 15,02s system 307% cpu 59,309 total
+
 ```
 
 Execution time for 1M row
@@ -43,18 +47,24 @@ $ time ./calculate_average_baseline.sh
 
 $ time ./calculate_average_thomaswue.sh > /dev/null  
 1,16s user 0,22s system 200% cpu 0,689 total
+
+$ time ./calculate_average_AlexanderYastrebov.sh  
+0,24s user 0,10s system 171% cpu 0,194 total
+
 ```
 ---
 
 My solution steps:
 
-| Step | Description          | Exec. time | Improvement | Baseline imp. | Commit |
-|-----:|----------------------|-----------:|------------:|--------------:|:-------|
-| 1    | Naive implementation | ?s         |             |               |        |
+| Step | Description    | Exec. time | Improvement | Baseline imp. | Commit |
+|-----:|----------------|-----------:|------------:|--------------:|:-------|
+| 1    | Naive approach | 286s       | -           | -             |        |
 
 For reference:
 - 1BRC Baseline: 392.96s
 - Thomas Wuerthinger: 62.58s
+- Alexander Yastrebov (Go): 59.30s
+
 ---
 
 TODO:
