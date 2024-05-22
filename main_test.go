@@ -7,11 +7,11 @@ import (
 
 func TestAvg(t *testing.T) {
 	for i, test := range []struct {
-		temps    []float64
+		temps    []float32
 		expected string
 	}{
 		{
-			temps: []float64{
+			temps: []float32{
 				7.8, 0.8, 15.2, 21, 3, 16.1, 23.4, 13.9, 16.2, 16.9, 20.3,
 				15.6, 18.7, 6, 13.9, 20, 6.7, 6.5, 17.6, 21.9, -0.8, 17.2,
 				19.1, 7.7, 1.8, 15.7, 20.4, 7.7, 15.2, 19.3, 32.7, 15.6,
@@ -26,7 +26,7 @@ func TestAvg(t *testing.T) {
 			expected: "14.6", // 14.55
 		},
 		{
-			temps: []float64{
+			temps: []float32{
 				11.9, 5, 28.3, 13.1, 22.4, 20.7, 17.9, 23.7, 15.7, 13.7, 9.6,
 				9.3, 29.4, 23.2, 14.7, 26.7, 16.7, 20.5, 34.6, 25.5, 11.7,
 				25.5, 20.4, 25, 13.1, 26.7, 15.2, 11.5, 14.6, 21.9, 19.8,
@@ -42,7 +42,7 @@ func TestAvg(t *testing.T) {
 			expected: "18.3", // 18.35
 		},
 		{
-			temps: []float64{
+			temps: []float32{
 				14.5, 16.2, 9.4, 25.5, 21.4, 2, 9.5, 23.1, 26.4, 3.1, 31.6,
 				1.6, 14.8, 19.8, 18.2, 19.1, 19.8, 20.2, 24.4, 13.8, 12,
 				25.5, 12.2, 23.1, 19.1, 20.7, 1.8, 14.9, 7.4, 24.8, 28.4,
@@ -57,16 +57,38 @@ func TestAvg(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("Test %d", i), func(t *testing.T) {
-			sum := 0
+			sum := int32(0)
 			for _, temp := range test.temps {
-				sum += int(temp * 10)
+				sum += int32(temp * 10)
 			}
 
-			actual := avg(measurement{sum: sum, count: len(test.temps)})
+			actual := avg(measurement{sum: sum, count: int32(len(test.temps))})
 			actualString := fmt.Sprintf("%.1f", actual)
 			if actualString != test.expected {
 				t.Errorf("expected %s, got %s", test.expected, actualString)
 			}
 		})
+	}
+}
+
+func BenchmarkPrintResult(b *testing.B) {
+	measurements := map[string]measurement{
+		"foo":    {min: 1, max: 2, sum: 3, count: 4},
+		"bar":    {min: 5, max: 6, sum: 7, count: 8},
+		"foobar": {min: 9, max: 10, sum: 11, count: 12},
+	}
+	stations := []string{"foo", "bar", "foobar"}
+
+	b.ReportAllocs()
+	var res string
+	for i := 0; i < b.N; i++ {
+		res = getResult2(stations, measurements)
+	}
+	_ = res
+}
+
+func BenchmarkMain(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		main()
 	}
 }
