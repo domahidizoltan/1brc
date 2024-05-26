@@ -56,9 +56,14 @@ $ time ./calculate_average_AlexanderYastrebov.sh
 
 My solution steps:
 
-| Step | Description    | Exec. time | Improvement | Baseline imp. | Commit |
-|-----:|----------------|-----------:|------------:|--------------:|:-------|
-| 1    | Naive approach | 286s       | -           | -             |        |
+| Step | Description                     | Exec. time | Improvement | Baseline imp. | Commit                                                                                                  |
+|-----:|---------------------------------|-----------:|------------:|--------------:|:--------------------------------------------------------------------------------------------------------|
+| 1    | Naive approach                  | 286s       | -           | -             | [6bc5f94](https://github.com/domahidizoltan/1brc/blob/6bc5f9461f976b00b7b5dd02277c7196521d7c31/main.go) |
+| 2    | Parallel measurement processors | 243s       | 1.177x      | 1.177x        |                                                                                                         |
+
+Comments for the steps:  
+  1. Naive approach: Sequential file read and processing using 1 CPU core.  
+  2. Parallel measurement processors: Sequential file read with multiple parallel measurement processors. The processors are sharded and one stations measurement will always be processed by the same processor. The results are merged and printed at the end. No concurrency optimizations were made at this point.  
 
 For reference:
 - 1BRC Baseline: 392.96s

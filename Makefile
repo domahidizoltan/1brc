@@ -1,6 +1,6 @@
 run:
 	go build -o 1brc main.go
-	./1brc > tmp.txt
+	./1brc withTime > tmp.txt
 	head -n1 tmp.txt > averages.txt
 	tail -n1 tmp.txt
 	rm 1brc tmp.txt

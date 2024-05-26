@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -16,59 +18,138 @@ type measurement struct {
 	sum, count int
 }
 
-var (
-	stations     []string
-	measurements = map[string]measurement{}
+const (
+	resFormat           = "%s=%.1f/%.1f/%.1f"
+	fileLinesBufferSize = 1000000
+
+// maxMeasurementWorkers = 3
 )
 
-const resFormat = ", %s=%.1f/%.1f/%.1f"
+var maxMeasurementWorkers = runtime.NumCPU()
 
 func main() {
+	var printTime bool
+	if len(os.Args) > 1 {
+		if os.Args[1] == "withTime" {
+			printTime = true
+		}
+	}
+
 	start := time.Now()
+
 	f, err := os.Open("measurements.txt")
 	if err != nil {
 		panic(err)
 	}
 	defer f.Close()
 
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		tokens := strings.Split(line, ";")
+	var wg sync.WaitGroup
+	wg.Add(maxMeasurementWorkers)
 
-		t, err := strconv.ParseFloat(tokens[1], 64)
-		if err != nil {
+	linesCh := readFileLines(f)
+
+	measurements := getMeasurements(linesCh, &wg)
+
+	wg.Wait()
+
+	res := getResult(measurements)
+	fmt.Println(res)
+
+	if printTime {
+		fmt.Println(time.Since(start))
+	}
+}
+
+func readFileLines(f *os.File) chan string {
+	ch := make(chan string, fileLinesBufferSize)
+	go func(f *os.File) {
+		defer close(ch)
+
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			line := scanner.Text()
+			ch <- line
+		}
+		if err := scanner.Err(); err != nil {
 			panic(err)
 		}
+	}(f)
+	return ch
+}
 
-		temp := int(t * 10)
-		if m, ok := measurements[tokens[0]]; !ok {
-			stations = append(stations, tokens[0])
-			measurements[tokens[0]] = measurement{t, t, temp, 1}
-		} else {
-			m.min = math.Min(m.min, t)
-			m.max = math.Max(m.max, t)
-			m.sum += temp
-			m.count++
-			measurements[tokens[0]] = m
+func getMeasurements(linesCh chan string, wg *sync.WaitGroup) map[string]measurement {
+	workerCh := make([]chan string, maxMeasurementWorkers)
+	resCh := make(chan map[string]measurement, maxMeasurementWorkers)
+	for i := 0; i < maxMeasurementWorkers; i++ {
+		workerCh[i] = make(chan string, int(fileLinesBufferSize/maxMeasurementWorkers))
+		go func(wCh chan string, idx int) {
+			defer wg.Done()
+			resCh <- processMeasurements(wCh)
+		}(workerCh[i], i)
+	}
+
+	for line := range linesCh {
+		idx := line[0] % byte(maxMeasurementWorkers)
+		workerCh[idx] <- line
+	}
+	for i := 0; i < maxMeasurementWorkers; i++ {
+		close(workerCh[i])
+	}
+
+	measurements := map[string]measurement{}
+	for i := 0; i < maxMeasurementWorkers; i++ {
+		m := <-resCh
+		for k, v := range m {
+			measurements[k] = v
 		}
-
 	}
-	if err := scanner.Err(); err != nil {
-		panic(err)
-	}
+	return measurements
+}
 
+func processMeasurements(linesCh chan string) map[string]measurement {
+	measurements := map[string]measurement{}
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func(linesCh chan string) {
+		for line := range linesCh {
+			tokens := strings.Split(line, ";")
+			t, err := strconv.ParseFloat(tokens[1], 64)
+			if err != nil {
+				panic(err)
+			}
+
+			temp := int(t * 10)
+			if m, ok := measurements[tokens[0]]; !ok {
+				measurements[tokens[0]] = measurement{t, t, temp, 1}
+			} else {
+				m.min = math.Min(m.min, t)
+				m.max = math.Max(m.max, t)
+				m.sum += temp
+				m.count++
+				measurements[tokens[0]] = m
+			}
+		}
+		wg.Done()
+	}(linesCh)
+
+	wg.Wait()
+	return measurements
+}
+
+func getResult(measurements map[string]measurement) string {
+	stations := make([]string, 0, len(measurements))
+	for station := range measurements {
+		stations = append(stations, station)
+	}
 	slices.Sort(stations)
-	mes := measurements[stations[0]]
-	res := fmt.Sprintf("{%s=%.1f/%.1f/%.1f", stations[0], mes.min, avg(mes), mes.max)
-	for _, station := range stations[1:] {
-		mes := measurements[string(station)]
-		res += fmt.Sprintf(resFormat, station, mes.min, avg(mes), mes.max)
-	}
-	res += "}"
 
-	fmt.Println(res)
-	fmt.Println(time.Since(start))
+	res := make([]string, 0, len(stations))
+	for _, station := range stations {
+		mes := measurements[string(station)]
+		res = append(res, fmt.Sprintf(resFormat, station, mes.min, avg(mes), mes.max))
+	}
+	return fmt.Sprintf("{%s}", strings.Join(res, ", "))
 }
 
 func avg(mes measurement) float64 {
