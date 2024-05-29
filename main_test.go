@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -69,4 +70,29 @@ func TestAvg(t *testing.T) {
 			}
 		})
 	}
+}
+
+func BenchmarkMain(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		main()
+	}
+}
+
+func BenchmarkReadFileLines(b *testing.B) {
+	b.ReportAllocs()
+
+	fileContentStr := `maH;6.9
+Nerupperichc;13.3
+gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.2
+PupriMajīthaWest DraytonDhama;10.8
+niSu;14.8`
+
+	fileContent := strings.NewReader(fileContentStr)
+	res := []byte{}
+	for i := 0; i < b.N; i++ {
+		for line := range readFileLines(fileContent) {
+			res = line
+		}
+	}
+	_ = res
 }

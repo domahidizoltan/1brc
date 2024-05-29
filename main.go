@@ -1,11 +1,14 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"runtime"
+
+	// "runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,13 +22,14 @@ type measurement struct {
 }
 
 const (
-	resFormat           = "%s=%.1f/%.1f/%.1f"
-	fileLinesBufferSize = 1000000
-
-// maxMeasurementWorkers = 3
+	resFormat   = "%s=%.1f/%.1f/%.1f"
+	l1CacheSize = 64 * 1024
 )
 
-var maxMeasurementWorkers = runtime.NumCPU()
+var (
+	maxMeasurementWorkers = runtime.NumCPU()
+	fileLinesBufferSize   = runtime.NumCPU() * 10000
+)
 
 func main() {
 	var printTime bool
@@ -60,24 +64,39 @@ func main() {
 	}
 }
 
-func readFileLines(f *os.File) chan string {
-	ch := make(chan string, fileLinesBufferSize)
-	go func(f *os.File) {
-		defer close(ch)
+func readFileLines(f io.Reader) chan []byte {
+	ch := make(chan []byte, fileLinesBufferSize)
 
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			line := scanner.Text()
-			ch <- line
-		}
-		if err := scanner.Err(); err != nil {
-			panic(err)
+	go func(f io.Reader) {
+		defer close(ch)
+		tmpLine := []byte(nil)
+		buf := make([]byte, l1CacheSize-1024)
+		for {
+			n, err := f.Read(buf)
+			if err != nil {
+				if err != io.EOF {
+					panic(err)
+				}
+				break
+			}
+
+			lastIdx := bytes.LastIndex(buf[:n], []byte("\n"))
+			chunk := append([]byte(nil), tmpLine...)
+			if lastIdx > -1 {
+				chunk = append(chunk, buf[:lastIdx]...)
+				tmpLine = append([]byte(nil), buf[lastIdx+1:n]...)
+			} else {
+				chunk = append(chunk, buf[:n]...)
+				tmpLine = []byte(nil)
+			}
+
+			ch <- chunk
 		}
 	}(f)
 	return ch
 }
 
-func getMeasurements(linesCh chan string, wg *sync.WaitGroup) map[string]measurement {
+func getMeasurements(linesCh chan []byte, wg *sync.WaitGroup) map[string]measurement {
 	workerCh := make([]chan string, maxMeasurementWorkers)
 	resCh := make(chan map[string]measurement, maxMeasurementWorkers)
 	for i := 0; i < maxMeasurementWorkers; i++ {
@@ -88,9 +107,13 @@ func getMeasurements(linesCh chan string, wg *sync.WaitGroup) map[string]measure
 		}(workerCh[i], i)
 	}
 
-	for line := range linesCh {
-		idx := line[0] % byte(maxMeasurementWorkers)
-		workerCh[idx] <- line
+	counter := 0
+	for chunk := range linesCh {
+		idx := counter % maxMeasurementWorkers
+		for _, line := range strings.Split(string(chunk), "\n") {
+			workerCh[idx] <- line
+		}
+		counter++
 	}
 	for i := 0; i < maxMeasurementWorkers; i++ {
 		close(workerCh[i])
@@ -100,7 +123,16 @@ func getMeasurements(linesCh chan string, wg *sync.WaitGroup) map[string]measure
 	for i := 0; i < maxMeasurementWorkers; i++ {
 		m := <-resCh
 		for k, v := range m {
-			measurements[k] = v
+			if m, ok := measurements[k]; !ok {
+				measurements[k] = v
+			} else {
+				m.min = math.Min(m.min, v.min)
+				m.max = math.Max(m.max, v.max)
+				m.sum += v.sum
+				m.count += v.count
+				measurements[k] = m
+
+			}
 		}
 	}
 	return measurements

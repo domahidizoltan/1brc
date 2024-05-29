@@ -54,21 +54,44 @@ $ time ./calculate_average_AlexanderYastrebov.sh
 ```
 ---
 
+For reference:
+- 1BRC Baseline: 392.96s
+- Thomas Wuerthinger: 62.58s
+- Alexander Yastrebov (Go): 59.30s
+
 My solution steps:
 
 | Step | Description                     | Exec. time | Improvement | Baseline imp. | Commit                                                                                                  |
 |-----:|---------------------------------|-----------:|------------:|--------------:|:--------------------------------------------------------------------------------------------------------|
 | 1    | Naive approach                  | 286s       | -           | -             | [6bc5f94](https://github.com/domahidizoltan/1brc/blob/6bc5f9461f976b00b7b5dd02277c7196521d7c31/main.go) |
-| 2    | Parallel measurement processors | 243s       | 1.177x      | 1.177x        |                                                                                                         |
+| 2    | Parallel measurement processors | 243s       | 1.177x      | 1.177x        | [b652f32](https://github.com/domahidizoltan/1brc/blob/b652f3292ec34aabdddaea0ba60a6bd29502ea2e/main.go) |
+| 3    | Batch read file lines           | 167s       | 1.455x      | 1.712x        |                                                                                                         |
 
 Comments for the steps:  
   1. Naive approach: Sequential file read and processing using 1 CPU core.  
   2. Parallel measurement processors: Sequential file read with multiple parallel measurement processors. The processors are sharded and one stations measurement will always be processed by the same processor. The results are merged and printed at the end. No concurrency optimizations were made at this point.  
+  3. Batch read file lines: After doing a trace analysis (using file with 1M lines) we could see that `processMeasurements` function takes ~48% of the total time and more than half of it's time it is waiting for `chanrecv` (also sharding is suboptimal, less processing is done as expected). On the other hand `readFileLines` takes ~22% of the total time but it does a lot of IO reads with waits between them. The next step was optimizing only(!) the file read to read lines in batches and ignore splitting and converting them to strings. After this `readFileLines` took 1% of the total time (~20% waiting and half of it in syscall) and `processMeasurements` took 77% (~20% waiting). `processMeasurements` changed mostly the hashing, and now a station could land on multiple worker so at the end we need to merge them. With these changes the CPU cores are more busy and `readFileLines` does more syscalls in bigger chunks.
+  Benchmark before and after for `readFileLines`:
+```sh
+❯ benchstat stats.old.txt stats.txt
+goos: linux
+goarch: amd64
+pkg: github.com/domahidizoltan/1brc
+cpu: Intel(R) Core(TM) i7-7500U CPU @ 2.70GHz
+                │ stats.old.txt │             stats.txt              │
+                │    sec/op     │   sec/op     vs base               │
+ReadFileLines-4    3960.8µ ± 9%   130.9µ ± 2%  -96.70% (p=0.002 n=6)
 
-For reference:
-- 1BRC Baseline: 392.96s
-- Thomas Wuerthinger: 62.58s
-- Alexander Yastrebov (Go): 59.30s
+                │ stats.old.txt  │              stats.txt               │
+                │      B/op      │     B/op       vs base               │
+ReadFileLines-4   15636.2Ki ± 0%   1008.1Ki ± 0%  -93.55% (p=0.002 n=6)
+
+                │ stats.old.txt │           stats.txt           │
+                │   allocs/op   │ allocs/op   vs base           │
+ReadFileLines-4      5.000 ± 0%   5.000 ± 0%  ~ (p=1.000 n=6) ¹
+¹ all samples are equal
+```
+  4. TODO
 
 ---
 
