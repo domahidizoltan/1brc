@@ -1,0 +1,11 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/domahidizoltan/1brc
+BenchmarkProcessMeasurements-4   	  690807	      1721 ns/op	     680 B/op	       8 allocs/op
+BenchmarkProcessMeasurements-4   	  686011	      1723 ns/op	     680 B/op	       8 allocs/op
+BenchmarkProcessMeasurements-4   	  704232	      1722 ns/op	     680 B/op	       8 allocs/op
+BenchmarkProcessMeasurements-4   	  689385	      1724 ns/op	     680 B/op	       8 allocs/op
+BenchmarkProcessMeasurements-4   	  708202	      1719 ns/op	     680 B/op	       8 allocs/op
+BenchmarkProcessMeasurements-4   	  688071	      1722 ns/op	     680 B/op	       8 allocs/op
+PASS
+ok  	github.com/domahidizoltan/1brc	8.011s

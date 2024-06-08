@@ -12,18 +12,18 @@ use-1m:
 	ln -fs files/measurements_1M.txt measurements.txt
 
 diff-1b:
-	cmp -l averages.txt files/avg_baseline_1B.txt
+	cmp -l averages.txt files/avg_baseline_1B.txt | wc -l
 
 diff-1m:
-	cmp -l averages.txt files/avg_baseline_1M.txt
+	cmp -l averages.txt files/avg_baseline_1M.txt | wc -l
 
 profile:
 	rm -f /tmp/profile.* /tmp/trace.out
-	go test -bench BenchmarkMain -count=1 -cpuprofile=/tmp/profile.cpu.out -memprofile=/tmp/profile.mem.out -blockprofile=/tmp/profile.block.out -v -trace=/tmp/trace.out
+	go test -bench BenchmarkMain -cpu=4 -benchtime 1x -cpuprofile=/tmp/profile.cpu.out -memprofile=/tmp/profile.mem.out -blockprofile=/tmp/profile.block.out -v -trace=/tmp/trace.out
 
 profile-test:
 	rm -f /tmp/profile.* /tmp/trace.out
-	go test -bench $(test) -count=1 -cpuprofile=/tmp/profile.cpu.out -memprofile=/tmp/profile.mem.out -blockprofile=/tmp/profile.block.out -v -trace=/tmp/trace.out
+	go test -bench Benchmark$(test) -cpu=4 -benchtime 1x -cpuprofile=/tmp/profile.cpu.out -memprofile=/tmp/profile.mem.out -blockprofile=/tmp/profile.block.out -v -trace=/tmp/trace.out
 
 #mode is one of cpu, mem or block. Usage: mode=block make pprof
 pprof:
@@ -36,7 +36,7 @@ trace:
 	go tool trace /tmp/trace.out
 
 bench:
-	go test -bench=$(test) -count=6 > stats.txt
+	go test -bench=Benchmark$(test) -cpu=4 -count=6 > stats.txt
 
 #golang.org/x/perf/cmd/benchstat@latest
 benchstat:

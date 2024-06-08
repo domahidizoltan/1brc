@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -58,12 +59,12 @@ func TestAvg(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("Test %d", i), func(t *testing.T) {
-			sum := 0
+			var sum int64
 			for _, temp := range test.temps {
-				sum += int(temp * 10)
+				sum += int64(temp * 10)
 			}
 
-			actual := avg(measurement{sum: sum, count: len(test.temps)})
+			actual := avg(measurement2{sum: sum, count: uint32(len(test.temps))})
 			actualString := fmt.Sprintf("%.1f", actual)
 			if actualString != test.expected {
 				t.Errorf("expected %s, got %s", test.expected, actualString)
@@ -95,4 +96,107 @@ niSu;14.8`
 		}
 	}
 	_ = res
+}
+
+func BenchmarkProcessMeasurements(b *testing.B) {
+	b.ReportAllocs()
+
+	res := map[string]measurement2{}
+
+	for i := 0; i < b.N; i++ {
+		linesCh := make(chan string)
+		go func(linesCh chan string) {
+			linesCh <- `gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.2
+			test;1.0
+			gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.0
+			test;2.0
+			gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.1`
+			close(linesCh)
+		}(linesCh)
+		res = <-processMeasurements2(linesCh)
+	}
+	_ = res
+}
+
+//
+// func BenchmarkGetMeasurements(b *testing.B) {
+// 	b.ReportAllocs()
+// 	maxMeasurementWorkers = 1
+// 	processMeasurementsFunc = func(linesCh chan string) map[string]measurement {
+// 		<-linesCh
+// 		return map[string]measurement{
+// 			"gsheGuyuanRui’anKhulnaMuscatWenlingGaoz": {
+// 				min: 90, max: 92, sum: 273, count: 3,
+// 			},
+// 			"test": {
+// 				min: 10, max: 20, sum: 30, count: 2,
+// 			},
+// 		}
+// 	}
+//
+// 	res := map[string]measurement{}
+// 	for i := 0; i < b.N; i++ {
+// 		var wg sync.WaitGroup
+// 		wg.Add(1)
+// 		linesCh := make(chan []byte)
+// 		go func(linesCh chan []byte) {
+// 			linesCh <- []byte(`gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.2
+// test;1.0
+// gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.0
+// test;2.0
+// gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.1`)
+// 			close(linesCh)
+// 		}(linesCh)
+// 		res = getMeasurements(linesCh, &wg)
+// 		wg.Wait()
+// 	}
+// 	_ = res
+// }
+//
+
+func BenchmarkGetMeasurements(b *testing.B) {
+	b.ReportAllocs()
+	maxMeasurementWorkers = 1
+	processMeasurements2Func = func(linesCh chan string) chan map[string]measurement2 {
+		<-linesCh
+		res := make(chan map[string]measurement2)
+		defer close(res)
+		res <- map[string]measurement2{
+			"gsheGuyuanRui’anKhulnaMuscatWenlingGaoz": {
+				min: 90, max: 92, sum: 273, count: 3,
+			},
+			"test": {
+				min: 10, max: 20, sum: 30, count: 2,
+			},
+		}
+		return res
+		// TODO deadlock
+	}
+
+	res := map[string]measurement2{}
+	for i := 0; i < b.N; i++ {
+		var wg sync.WaitGroup
+		wg.Add(1)
+		linesCh := make(chan []byte)
+		go func(linesCh chan []byte) {
+			linesCh <- []byte(`gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.2
+
+test;1.0
+gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.0
+test;2.0
+gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.1`)
+
+			close(linesCh)
+		}(linesCh)
+		res = getMeasurements2(linesCh, &wg)
+		wg.Wait()
+	}
+	_ = res
+}
+
+func TestTempToInt(t *testing.T) {
+	res := tempToInt("-23.9")
+	if res != -239 {
+		t.Errorf("not equal: %d", res)
+	}
 }

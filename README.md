@@ -7,7 +7,7 @@ Find more details about:
 - the leaderboard and how to generate or run the solutions https://github.com/gunnarmorling/1brc  
 
 
-My system information:  
+My system information (Ubuntu, Dell TODO):  
 ```sh
 $ lscpu | sed -n '1p;5p;8p;11p;20,23p'
 Architecture:                       x86_64
@@ -22,10 +22,30 @@ L3 cache:                           4 MiB (1 instance)
 $ free -g -h -t | grep Total | cut -b 17-20
 17Gi
 ``` 
+  
+Apple M1 Pro:
+```sh
+$ system_profiler SPHardwareDataType | sed -n '8,9p'
+      Chip: Apple M1 Pro
+      Total Number of Cores: 10 (8 performance and 2 efficiency)
+
+$ uname -m
+arm64
+
+$ sysctl -a | grep cache | sed -n '32,35p'
+hw.cachelinesize: 128
+hw.l1icachesize: 131072
+hw.l1dcachesize: 65536
+hw.l2cachesize: 4194304
+
+$ sysctl -n hw.memsize | numfmt --to=si
+35G
+```
+
 
 ---
 
-Reference implementations (on my machine):  
+Reference implementations on my machine:  
 
 Execution time for 1B row
 ```sh
@@ -52,20 +72,49 @@ $ time ./calculate_average_AlexanderYastrebov.sh
 0,24s user 0,10s system 171% cpu 0,194 total
 
 ```
+
+
+Reference implementations on M1 Pro:  
+
+Execution time for 1B row
+```sh
+$ time ./calculate_average_baseline.sh > /dev/null  
+206.19s user 6.63s system 100% cpu 3:32.62 total
+
+$ time ./calculate_average_thomaswue.sh > /dev/null  
+24.19s user 2.20s system 674% cpu 3.914 total
+
+$ time ./calculate_average_AlexanderYastrebov.sh > /dev/null  
+45.35s user 1.90s system 858% cpu 5.505 total
+```
+
+Execution time for 1M row
+```sh
+$ time ./calculate_average_baseline.sh  
+0.57s user 0.08s system 99% cpu 0.653 total
+
+$ time ./calculate_average_thomaswue.sh > /dev/null  
+0.69s user 0.06s system 137% cpu 0.552 total
+
+$ time ./calculate_average_AlexanderYastrebov.sh  
+0.13s user 0.03s system 137% cpu 0.115 total
+```
+
+
 ---
 
 For reference:
-- 1BRC Baseline: 392.96s
-- Thomas Wuerthinger: 62.58s
-- Alexander Yastrebov (Go): 59.30s
+- 1BRC Baseline: 392.96s (M1: 212.62s)
+- Thomas Wuerthinger: 62.58s (M1: 3.91s)
+- Alexander Yastrebov (Go): 59.30s (M1: 5.50s)
 
 My solution steps:
 
-| Step | Description                     | Exec. time | Improvement | Baseline imp. | Commit                                                                                                  |
-|-----:|---------------------------------|-----------:|------------:|--------------:|:--------------------------------------------------------------------------------------------------------|
-| 1    | Naive approach                  | 286s       | -           | -             | [6bc5f94](https://github.com/domahidizoltan/1brc/blob/6bc5f9461f976b00b7b5dd02277c7196521d7c31/main.go) |
-| 2    | Parallel measurement processors | 243s       | 1.177x      | 1.177x        | [b652f32](https://github.com/domahidizoltan/1brc/blob/b652f3292ec34aabdddaea0ba60a6bd29502ea2e/main.go) |
-| 3    | Batch read file lines           | 167s       | 1.455x      | 1.712x        |                                                                                                         |
+| Step | Description                     | Exec. time      | Improvement         | Baseline imp.       | Commit                                                                                                  |
+|-----:|---------------------------------|----------------:|--------------------:|--------------------:|:--------------------------------------------------------------------------------------------------------|
+| 1    | Naive approach                  | 286s (M1: 167s) | -                   | -                   | [6bc5f94](https://github.com/domahidizoltan/1brc/blob/6bc5f9461f976b00b7b5dd02277c7196521d7c31/main.go) |
+| 2    | Parallel measurement processors | 243s (M1: 164s) | 1.177x (M1: 1.018x) | 1.177x (M1: 1018.x) | [b652f32](https://github.com/domahidizoltan/1brc/blob/b652f3292ec34aabdddaea0ba60a6bd29502ea2e/main.go) |
+| 3    | Batch read file lines           | 167s (62s)      | 1.455x (M1: 2.645x) | 1.712x (M1: 2.693x) |                                                                                                         |
 
 Comments for the steps:  
   1. Naive approach: Sequential file read and processing using 1 CPU core.  
@@ -91,7 +140,7 @@ ReadFileLines-4   15636.2Ki ± 0%   1008.1Ki ± 0%  -93.55% (p=0.002 n=6)
 ReadFileLines-4      5.000 ± 0%   5.000 ± 0%  ~ (p=1.000 n=6) ¹
 ¹ all samples are equal
 ```
-  4. TODO
+  4. TODO -> M1 19.47
 
 ---
 
