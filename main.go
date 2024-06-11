@@ -7,8 +7,6 @@ import (
 	"math"
 	"os"
 	"runtime"
-
-	// "runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -29,6 +27,7 @@ const (
 var (
 	maxMeasurementWorkers = runtime.NumCPU()
 	fileLinesBufferSize   = runtime.NumCPU() * 10000
+	chunksBufferSize      = 1000
 )
 
 func main() {
@@ -47,13 +46,11 @@ func main() {
 	}
 	defer f.Close()
 
-	var wg sync.WaitGroup
-	wg.Add(maxMeasurementWorkers)
-
 	linesCh := readFileLines(f)
 
+	var wg sync.WaitGroup
+	wg.Add(maxMeasurementWorkers)
 	measurements := getMeasurements(linesCh, &wg)
-
 	wg.Wait()
 
 	res := getResult(measurements)
@@ -96,76 +93,86 @@ func readFileLines(f io.Reader) chan []byte {
 	return ch
 }
 
-func getMeasurements(linesCh chan []byte, wg *sync.WaitGroup) map[string]measurement {
-	workerCh := make([]chan string, maxMeasurementWorkers)
-	resCh := make(chan map[string]measurement, maxMeasurementWorkers)
+var processMeasurementsFunc func(string) map[string]measurement = processMeasurements
+
+func getMeasurements(chunksCh chan []byte, wg *sync.WaitGroup) map[string]measurement {
+	workerChans := make([]chan string, maxMeasurementWorkers)
+	resCh := make(chan map[string]measurement, maxMeasurementWorkers*chunksBufferSize)
 	for i := 0; i < maxMeasurementWorkers; i++ {
-		workerCh[i] = make(chan string, int(fileLinesBufferSize/maxMeasurementWorkers))
-		go func(wCh chan string, idx int) {
+		workerChans[i] = make(chan string, int(chunksBufferSize))
+		go func(wCh chan string, wg *sync.WaitGroup) {
 			defer wg.Done()
-			resCh <- processMeasurements(wCh)
-		}(workerCh[i], i)
+			for c := range wCh {
+				resCh <- processMeasurementsFunc(c)
+			}
+		}(workerChans[i], wg)
 	}
 
-	counter := 0
-	for chunk := range linesCh {
-		idx := counter % maxMeasurementWorkers
-		for _, line := range strings.Split(string(chunk), "\n") {
-			workerCh[idx] <- line
+	go func(chunksCh chan []byte) {
+		counter := 0
+		for chunk := range chunksCh {
+			idx := counter % maxMeasurementWorkers
+			workerChans[idx] <- string(chunk)
+			counter++
 		}
-		counter++
-	}
-	for i := 0; i < maxMeasurementWorkers; i++ {
-		close(workerCh[i])
-	}
+		for i := 0; i < maxMeasurementWorkers; i++ {
+			close(workerChans[i])
+		}
+	}(chunksCh)
 
 	measurements := map[string]measurement{}
-	for i := 0; i < maxMeasurementWorkers; i++ {
-		m := <-resCh
-		for k, v := range m {
-			if m, ok := measurements[k]; !ok {
-				measurements[k] = v
-			} else {
-				m.min = math.Min(m.min, v.min)
-				m.max = math.Max(m.max, v.max)
-				m.sum += v.sum
-				m.count += v.count
-				measurements[k] = m
+	var resWg sync.WaitGroup
+	resWg.Add(1)
+	go func(resCh chan map[string]measurement) {
+		for m := range resCh {
+			for k, v := range m {
+				if m, ok := measurements[k]; !ok {
+					measurements[k] = v
+				} else {
+					m.min = min(m.min, v.min)
+					m.max = max(m.max, v.max)
+					m.sum += v.sum
+					m.count += v.count
+					measurements[k] = m
 
+				}
 			}
 		}
-	}
+		resWg.Done()
+	}(resCh)
+
+	wg.Wait()
+	close(resCh)
+	resWg.Wait()
+
 	return measurements
 }
 
-func processMeasurements(linesCh chan string) map[string]measurement {
-	measurements := map[string]measurement{}
-	var wg sync.WaitGroup
-	wg.Add(1)
+func processMeasurements(chunk string) map[string]measurement {
+	measurements := make(map[string]measurement, 100)
+	lines := strings.Split(chunk, "\n")
+	for _, line := range lines {
+		idx := strings.Index(line, ";")
+		tokens := [2]string{line[:idx], line[idx+1:]}
 
-	go func(linesCh chan string) {
-		for line := range linesCh {
-			tokens := strings.Split(line, ";")
-			t, err := strconv.ParseFloat(tokens[1], 64)
-			if err != nil {
-				panic(err)
-			}
-
-			temp := int(t * 10)
-			if m, ok := measurements[tokens[0]]; !ok {
-				measurements[tokens[0]] = measurement{t, t, temp, 1}
-			} else {
-				m.min = math.Min(m.min, t)
-				m.max = math.Max(m.max, t)
-				m.sum += temp
-				m.count++
-				measurements[tokens[0]] = m
-			}
+		station := tokens[0]
+		t, err := strconv.ParseFloat(tokens[1], 64)
+		if err != nil {
+			panic(err)
 		}
-		wg.Done()
-	}(linesCh)
 
-	wg.Wait()
+		temp := int(t * 10)
+		if m, ok := measurements[station]; !ok {
+			measurements[station] = measurement{t, t, temp, 1}
+		} else {
+			m.min = min(m.min, t)
+			m.max = max(m.max, t)
+			m.sum += temp
+			m.count++
+			measurements[station] = m
+		}
+	}
+
 	return measurements
 }
 
