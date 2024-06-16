@@ -20,21 +20,32 @@ type measurement struct {
 }
 
 const (
-	resFormat   = "%s=%.1f/%.1f/%.1f"
-	l1CacheSize = 64 * 1024
+	resFormat = "%s=%.1f/%.1f/%.1f"
 )
 
 var (
 	maxMeasurementWorkers = runtime.NumCPU()
 	fileLinesBufferSize   = runtime.NumCPU() * 10000
-	chunksBufferSize      = 1000
+	chunksBufferSize      = 200
+
+	l3CacheSize = 4 * 1024 * 1024
+	args        = os.Args
 )
 
 func main() {
+	mem := runtime.MemStats{}
+	runtime.ReadMemStats(&mem)
+	l3CacheSize = int(mem.HeapSys)
+
 	var printTime bool
-	if len(os.Args) > 1 {
-		if os.Args[1] == "withTime" {
+	var noOutput bool
+	if len(args) > 1 {
+		switch args[1] {
+		case "noOutput":
+			noOutput = true
+		case "withTime":
 			printTime = true
+
 		}
 	}
 
@@ -54,6 +65,10 @@ func main() {
 	wg.Wait()
 
 	res := getResult(measurements)
+
+	if noOutput {
+		return
+	}
 	fmt.Println(res)
 
 	if printTime {
@@ -67,7 +82,7 @@ func readFileLines(f io.Reader) chan []byte {
 	go func(f io.Reader) {
 		defer close(ch)
 		tmpLine := []byte(nil)
-		buf := make([]byte, l1CacheSize-1024)
+		buf := make([]byte, l3CacheSize-1024)
 		for {
 			n, err := f.Read(buf)
 			if err != nil {

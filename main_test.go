@@ -74,6 +74,8 @@ func TestAvg(t *testing.T) {
 }
 
 func BenchmarkMain(b *testing.B) {
+	b.ReportAllocs()
+	args = []string{"", "noOutput"}
 	for i := 0; i < b.N; i++ {
 		main()
 	}
