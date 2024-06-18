@@ -110,13 +110,14 @@ For reference:
 
 My solution steps:
 
-| Step | Description                     | Exec. time          | Improvement             | Baseline imp.           | Commit                                                                                                  |
-|-----:|---------------------------------|--------------------:|------------------------:|------------------------:|:--------------------------------------------------------------------------------------------------------|
-| 1    | Naive approach                  | 286s<br/>(M1: 167s) | -                       | -                       | [6bc5f94](https://github.com/domahidizoltan/1brc/blob/6bc5f9461f976b00b7b5dd02277c7196521d7c31/main.go) |
-| 2    | Parallel measurement processors | 243s<br/>(M1: 164s) | 1.177x<br/>(M1: 1.018x) | 1.177x<br/>(M1: 1018.x) | [b652f32](https://github.com/domahidizoltan/1brc/blob/b652f3292ec34aabdddaea0ba60a6bd29502ea2e/main.go) |
-| 3    | Batch read file lines           | 167s<br/>(M1: 62s)  | 1.455x<br/>(M1: 2.645x) | 1.712x<br/>(M1: 2.693x) | [66f92ce](https://github.com/domahidizoltan/1brc/blob/66f92cea28d2dbc908f55ea45aca4587cbd74ced/main.go) |  |
-| 4    | Batch process lines             | 168s                | 0.994x                  | 1.702x                  | [a9a44aa](https://github.com/domahidizoltan/1brc/blob/a9a44aa33c9ad5519db61a221375edf5eb961844/main.go) |
-| 5    | Use L3 size chunks              | 93s                 | 1.806x                  | 3.075x                  |                                                                                                         |
+| Step | Description                           | Exec. time          | Improvement             | Baseline imp.           | Commit                                                                                                  |
+|-----:|---------------------------------------|--------------------:|------------------------:|------------------------:|:--------------------------------------------------------------------------------------------------------|
+| 1    | Naive approach                        | 286s<br/>(M1: 167s) | -                       | -                       | [6bc5f94](https://github.com/domahidizoltan/1brc/blob/6bc5f9461f976b00b7b5dd02277c7196521d7c31/main.go) |
+| 2    | Parallel measurement processors       | 243s<br/>(M1: 164s) | 1.177x<br/>(M1: 1.018x) | 1.177x<br/>(M1: 1018.x) | [b652f32](https://github.com/domahidizoltan/1brc/blob/b652f3292ec34aabdddaea0ba60a6bd29502ea2e/main.go) |
+| 3    | Batch read file lines                 | 167s<br/>(M1: 62s)  | 1.455x<br/>(M1: 2.645x) | 1.712x<br/>(M1: 2.693x) | [66f92ce](https://github.com/domahidizoltan/1brc/blob/66f92cea28d2dbc908f55ea45aca4587cbd74ced/main.go) |  |
+| 4    | Batch process lines                   | 168s                | 0.994x                  | 1.702x                  | [a9a44aa](https://github.com/domahidizoltan/1brc/blob/a9a44aa33c9ad5519db61a221375edf5eb961844/main.go) |
+| 5    | Use L3 size chunks                    | 93s                 | 1.806x                  | 3.075x                  | [2668364](https://github.com/domahidizoltan/1brc/blob/26683641033be126604a0af5cc63692b4d46b3d4/main.go) |
+| 6    | Refactor to parallel read and process | 100s                | 0.930x                  | 2.860x                  |                                                                                                         |
 
 Comments for the steps:  
   1. Naive approach: Sequential file read and processing using 1 CPU core.  
@@ -168,7 +169,8 @@ GetMeasurements-4       633.69Ki ± 0%   25.71Ki ± 0%  -95.94% (p=0.002 n=6)
                   │     allocs/op     │ allocs/op   vs base               │
 GetMeasurements-4          17.00 ± 0%   21.00 ± 0%  +23.53% (p=0.002 n=6)
 ```
-  5. Use L3 size chunks 
+  5. Use L3 size chunks
+  6. Refactor to parallel read and process: Refactor from concurrent heavy approach to parallel heavy approach. Read and process the file in equally distributed parts across all the CPU cores and merge the results at the end. Turned out this is a bit slower, however the goroutines has less synchronization, they spend ~15% more time in execution and uses far less system memory (visible in Top). This code looks easier to improve and could gain more performance with bigger number of cores.  
 ---
 
 TODO:

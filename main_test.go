@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
-	"sync"
 	"testing"
 )
 
@@ -81,25 +79,6 @@ func BenchmarkMain(b *testing.B) {
 	}
 }
 
-func BenchmarkReadFileLines(b *testing.B) {
-	b.ReportAllocs()
-
-	fileContentStr := `maH;6.9
-Nerupperichc;13.3
-gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.2
-PupriMajīthaWest DraytonDhama;10.8
-niSu;14.8`
-
-	fileContent := strings.NewReader(fileContentStr)
-	res := []byte{}
-	for i := 0; i < b.N; i++ {
-		for line := range readFileLines(fileContent) {
-			res = line
-		}
-	}
-	_ = res
-}
-
 func BenchmarkProcessMeasurements(b *testing.B) {
 	b.ReportAllocs()
 
@@ -112,41 +91,6 @@ func BenchmarkProcessMeasurements(b *testing.B) {
 			test;2.0
 			gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.1`
 		res = processMeasurements(lines)
-	}
-	_ = res
-}
-
-func BenchmarkGetMeasurements(b *testing.B) {
-	b.ReportAllocs()
-	maxMeasurementWorkers = 1
-	processMeasurementsFunc = func(string) map[string]measurement {
-		return map[string]measurement{
-			"gsheGuyuanRui’anKhulnaMuscatWenlingGaoz": {
-				min: 90, max: 92, sum: 273, count: 3,
-			},
-			"test": {
-				min: 10, max: 20, sum: 30, count: 2,
-			},
-		}
-	}
-
-	res := map[string]measurement{}
-	for i := 0; i < b.N; i++ {
-		var wg sync.WaitGroup
-		wg.Add(1)
-		linesCh := make(chan []byte)
-		go func(linesCh chan []byte) {
-			linesCh <- []byte(`gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.2
-
-test;1.0
-gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.0
-test;2.0
-gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.1`)
-
-			close(linesCh)
-		}(linesCh)
-		res = getMeasurements(linesCh, &wg)
-		wg.Wait()
 	}
 	_ = res
 }
