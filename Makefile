@@ -5,6 +5,13 @@ run:
 	tail -n1 tmp.txt
 	rm 1brc tmp.txt
 
+run-tuned:
+	go build -pgo=cpu.pprof -o 1brc main.go
+	GOGC=10000 ./1brc withTime > tmp.txt
+	head -n1 tmp.txt > averages.txt
+	tail -n1 tmp.txt
+	rm 1brc tmp.txt
+
 use-1b:
 	ln -fs files/measurements_1B.txt measurements.txt
 

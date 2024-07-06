@@ -118,7 +118,8 @@ My solution steps:
 | 4    | Batch process lines                    | 168s<br/>(M1: 68s)  | 0.994x<br/>(M1: 0.911x) | 1.702x<br/>(M1: 2.455x)  | [a9a44aa](https://github.com/domahidizoltan/1brc/blob/a9a44aa33c9ad5519db61a221375edf5eb961844/main.go) |
 | 5    | Use L3 size chunks                     | 93s<br/>(M1: 16s)   | 1.806x<br/>(M1: 4.25x)  | 3.075x<br/>(M1: 10.437x) | [2668364](https://github.com/domahidizoltan/1brc/blob/26683641033be126604a0af5cc63692b4d46b3d4/main.go) |
 | 6    | Refactor to parallel read and process  | 100s<br/>(M1: 17s)  | 0.930x<br/>(M1: 0.941x) | 2.860x<br/>(M1: 9.823x)  | [b0fac51](https://github.com/domahidizoltan/1brc/blob/b0fac51726f790a021e94de8488aca87b56e4605/main.go) |
-| 7    | Optimize map allocation for processing | 97s                 | 1.031x                  | 2.948x                   |                                                                                                         |
+| 7    | Optimize map allocation for processing | 97s<br/>(M1: 16s)   | 1.031x<br/>(M1: 1.062x) | 2.948x<br/>(M1: 10.437x) | [6ba10e5](https://github.com/domahidizoltan/1brc/blob/6ba10e5fbc720a6d303be728cdbacc3625504fc0/main.go) |
+| 8    | PGO and GC tuning                      | 86s<br/>(M1: 15s)   | 1.128x<br/>(M1: 1.066x) | 3.325x<br/>(M1: 11.133x) |                                                                                                         |
 
 Comments for the steps:  
   1. *Naive approach*: Sequential file read and processing using 1 CPU core.  
@@ -210,6 +211,8 @@ Looks this part did a lot of allocations.
        │      allocs/op      │ allocs/op   vs base               │
 Main-4          53023.0 ± 0%   125.0 ± 2%  -99.76% (p=0.002 n=6)
 ```
+  8. *PGO and GC tuning*: This is not part of the official challenge because it contains non-code optimization. Profile Guided Optimization resulted in a 4% gain. GC was configured to run 100x times less (at around 6-8GB on my machine), what resulted ~50% system memory usage on my machine instead of ~1%. This resulted in another 8% gain. The gain on M1 was minimal, less then 0.5s with PGO and nearly 1s with GC tuning.
+
 ---
 
 TODO:
