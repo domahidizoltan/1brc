@@ -110,19 +110,20 @@ For reference:
 
 My solution steps:
 
-| Step | Description                           | Exec. time          | Improvement             | Baseline imp.           | Commit                                                                                                  |
-|-----:|---------------------------------------|--------------------:|------------------------:|------------------------:|:--------------------------------------------------------------------------------------------------------|
-| 1    | Naive approach                        | 286s<br/>(M1: 167s) | -                       | -                       | [6bc5f94](https://github.com/domahidizoltan/1brc/blob/6bc5f9461f976b00b7b5dd02277c7196521d7c31/main.go) |
-| 2    | Parallel measurement processors       | 243s<br/>(M1: 164s) | 1.177x<br/>(M1: 1.018x) | 1.177x<br/>(M1: 1018.x) | [b652f32](https://github.com/domahidizoltan/1brc/blob/b652f3292ec34aabdddaea0ba60a6bd29502ea2e/main.go) |
-| 3    | Batch read file lines                 | 167s<br/>(M1: 62s)  | 1.455x<br/>(M1: 2.645x) | 1.712x<br/>(M1: 2.693x) | [66f92ce](https://github.com/domahidizoltan/1brc/blob/66f92cea28d2dbc908f55ea45aca4587cbd74ced/main.go) |  |
-| 4    | Batch process lines                   | 168s                | 0.994x                  | 1.702x                  | [a9a44aa](https://github.com/domahidizoltan/1brc/blob/a9a44aa33c9ad5519db61a221375edf5eb961844/main.go) |
-| 5    | Use L3 size chunks                    | 93s                 | 1.806x                  | 3.075x                  | [2668364](https://github.com/domahidizoltan/1brc/blob/26683641033be126604a0af5cc63692b4d46b3d4/main.go) |
-| 6    | Refactor to parallel read and process | 100s                | 0.930x                  | 2.860x                  |                                                                                                         |
+| Step | Description                            | Exec. time          | Improvement             | Baseline imp.            | Commit                                                                                                  |
+|-----:|----------------------------------------|--------------------:|------------------------:|-------------------------:|:--------------------------------------------------------------------------------------------------------|
+| 1    | Naive approach                         | 286s<br/>(M1: 167s) | -                       | -                        | [6bc5f94](https://github.com/domahidizoltan/1brc/blob/6bc5f9461f976b00b7b5dd02277c7196521d7c31/main.go) |
+| 2    | Parallel measurement processors        | 243s<br/>(M1: 164s) | 1.177x<br/>(M1: 1.018x) | 1.177x<br/>(M1: 1018.x)  | [b652f32](https://github.com/domahidizoltan/1brc/blob/b652f3292ec34aabdddaea0ba60a6bd29502ea2e/main.go) |
+| 3    | Batch read file lines                  | 167s<br/>(M1: 62s)  | 1.455x<br/>(M1: 2.645x) | 1.712x<br/>(M1: 2.693x)  | [66f92ce](https://github.com/domahidizoltan/1brc/blob/66f92cea28d2dbc908f55ea45aca4587cbd74ced/main.go) |  |
+| 4    | Batch process lines                    | 168s<br/>(M1: 68s)  | 0.994x<br/>(M1: 0.911x) | 1.702x<br/>(M1: 2.455x)  | [a9a44aa](https://github.com/domahidizoltan/1brc/blob/a9a44aa33c9ad5519db61a221375edf5eb961844/main.go) |
+| 5    | Use L3 size chunks                     | 93s<br/>(M1: 16s)   | 1.806x<br/>(M1: 4.25x)  | 3.075x<br/>(M1: 10.437x) | [2668364](https://github.com/domahidizoltan/1brc/blob/26683641033be126604a0af5cc63692b4d46b3d4/main.go) |
+| 6    | Refactor to parallel read and process  | 100s<br/>(M1: 17s)  | 0.930x<br/>(M1: 0.941x) | 2.860x<br/>(M1: 9.823x)  | [b0fac51](https://github.com/domahidizoltan/1brc/blob/b0fac51726f790a021e94de8488aca87b56e4605/main.go) |
+| 7    | Optimize map allocation for processing | 97s                 | 1.031x                  | 2.948x                   |                                                                                                         |
 
 Comments for the steps:  
-  1. Naive approach: Sequential file read and processing using 1 CPU core.  
-  2. Parallel measurement processors: Sequential file read with multiple parallel measurement processors. The processors are sharded and one stations measurement will always be processed by the same processor. The results are merged and printed at the end. No concurrency optimizations were made at this point.  
-  3. Batch read file lines: After doing a trace analysis (using file with 1M lines) we could see that `processMeasurements` function takes ~48% of the total time and more than half of it's time it is waiting for `chanrecv` (also sharding is suboptimal, less processing is done as expected). On the other hand `readFileLines` takes ~22% of the total time but it does a lot of IO reads with waits between them. The next step was optimizing only(!) the file read to read lines in batches and ignore splitting and converting them to strings. After this `readFileLines` took 1% of the total time (~20% waiting and half of it in syscall) and `processMeasurements` took 77% (~20% waiting). `processMeasurements` changed mostly the hashing, and now a station could land on multiple worker so at the end we need to merge them. With these changes the CPU cores are more busy and `readFileLines` does more syscalls in bigger chunks.
+  1. *Naive approach*: Sequential file read and processing using 1 CPU core.  
+  2. *Parallel measurement processors*: Sequential file read with multiple parallel measurement processors. The processors are sharded and one stations measurement will always be processed by the same processor. The results are merged and printed at the end. No concurrency optimizations were made at this point.  
+  3. *Batch read file lines*: After doing a trace analysis (using file with 1M lines) we could see that `processMeasurements` function takes ~48% of the total time and more than half of it's time it is waiting for `chanrecv` (also sharding is suboptimal, less processing is done as expected). On the other hand `readFileLines` takes ~22% of the total time but it does a lot of IO reads with waits between them. The next step was optimizing only(!) the file read to read lines in batches and ignore splitting and converting them to strings. After this `readFileLines` took 1% of the total time (~20% waiting and half of it in syscall) and `processMeasurements` took 77% (~20% waiting). `processMeasurements` changed mostly the hashing, and now a station could land on multiple worker so at the end we need to merge them. With these changes the CPU cores are more busy and `readFileLines` does more syscalls in bigger chunks.
   Benchmark before and after for `readFileLines`:
 ```sh
 ❯ benchstat stats.old.txt stats.txt | tail -n 11
@@ -139,7 +140,7 @@ ReadFileLines-4   15636.2Ki ± 0%   1008.1Ki ± 0%  -93.55% (p=0.002 n=6)
 ReadFileLines-4      5.000 ± 0%   5.000 ± 0%  ~ (p=1.000 n=6) ¹
 ¹ all samples are equal
 ```
-  4. Batch process lines: Read chunks in `getMeasurements` and distribute them to parallel workers to process the measurements (`processMeasurements`). The `processMeasurements` function split the lines and aggregates the chunks. The result is sent back to `getMeasurements` where the aggregated subresults are merged. Both `processMeasurements` (`pm_stats`) and `getMeasurements` (`gm_stats`) are improved, but the channel synchronizations are degrading the performance (what should be fixed next time)
+  4. *Batch process lines*: Read chunks in `getMeasurements` and distribute them to parallel workers to process the measurements (`processMeasurements`). The `processMeasurements` function split the lines and aggregates the chunks. The result is sent back to `getMeasurements` where the aggregated subresults are merged. Both `processMeasurements` (`pm_stats`) and `getMeasurements` (`gm_stats`) are improved, but the channel synchronizations are degrading the performance (what should be fixed next time)
 ```sh
 ❯ benchstat pm_stats.orig.txt pm_stats.txt | tail -n 11
                       │ pm_stats.orig.txt │            pm_stats.txt            │
@@ -169,8 +170,46 @@ GetMeasurements-4       633.69Ki ± 0%   25.71Ki ± 0%  -95.94% (p=0.002 n=6)
                   │     allocs/op     │ allocs/op   vs base               │
 GetMeasurements-4          17.00 ± 0%   21.00 ± 0%  +23.53% (p=0.002 n=6)
 ```
-  5. Use L3 size chunks
-  6. Refactor to parallel read and process: Refactor from concurrent heavy approach to parallel heavy approach. Read and process the file in equally distributed parts across all the CPU cores and merge the results at the end. Turned out this is a bit slower, however the goroutines has less synchronization, they spend ~15% more time in execution and uses far less system memory (visible in Top). This code looks easier to improve and could gain more performance with bigger number of cores.  
+  5. *Use L3 size chunks*
+  6. *Refactor to parallel read and process*: Refactor from concurrent heavy approach to parallel heavy approach. Read and process the file in equally distributed parts across all the CPU cores and merge the results at the end. Turned out this is a bit slower, however the goroutines has less synchronization, they spend ~15% more time in execution and uses far less system memory (visible in Top). This code looks easier to improve and could gain more performance with bigger number of cores.
+
+  7. *Optimize map allocation for processing*: After doing more profiling we can see that `processMeasurements` function does a lot of allocations (for the `measurement` object) and map lookups. By using FNV-1a hash as a key (`int32`) we could improve the execution time by ~10%, but it's not possible to use that for finding out the station names without adding extra complexity and we lose our gain. So the only improvement what I could see here is to properly pre-allocate the map and not have re-allocations during the execution. On a small dataset this only change gives as a 55% gain on the function level.
+```sh
+❯ benchstat pm_stats.orig.txt pm_stats.txt | tail -n 11
+                      │ pm_stats.orig.txt │            pm_stats.txt            │
+                      │      sec/op       │   sec/op     vs base               │
+ProcessMeasurements-4         3.565µ ± 3%   1.574µ ± 4%  -55.85% (p=0.002 n=6)
+
+                      │ pm_stats.orig.txt │            pm_stats.txt             │
+                      │       B/op        │     B/op      vs base               │
+ProcessMeasurements-4        7.008Ki ± 0%   1.109Ki ± 0%  -84.17% (p=0.002 n=6)
+
+                      │ pm_stats.orig.txt │           pm_stats.txt            │
+                      │     allocs/op     │ allocs/op   vs base               │
+ProcessMeasurements-4          4.000 ± 0%   3.000 ± 0%  -25.00% (p=0.002 n=6)
+```
+I also optimized the `getResults` function, but it's not a big overall improvement because it runs only on the end of the process for a short time (I did it just for the fun :) ).
+```sh
+❯ benchstat gr_stats.orig.txt gr_stats.txt | tail -n 11
+            │ gr_stats.orig.txt │            gr_stats.txt            │
+            │      sec/op       │   sec/op     vs base               │
+GetResult-4        3629.5n ± 2%   668.3n ± 1%  -81.59% (p=0.002 n=6)
+
+            │ gr_stats.orig.txt │           gr_stats.txt           │
+            │       B/op        │    B/op     vs base              │
+GetResult-4          560.0 ± 0%   576.0 ± 0%  +2.86% (p=0.002 n=6)
+
+            │ gr_stats.orig.txt │           gr_stats.txt            │
+            │     allocs/op     │ allocs/op   vs base               │
+GetResult-4         25.000 ± 0%   2.000 ± 0%  -92.00% (p=0.002 n=6)
+```
+Looks this part did a lot of allocations.
+```sh
+❯ benchstat main_stats.orig.txt main_stats.txt | tail -n 3
+       │ main_stats.orig.txt │          main_stats.txt           │
+       │      allocs/op      │ allocs/op   vs base               │
+Main-4          53023.0 ± 0%   125.0 ± 2%  -99.76% (p=0.002 n=6)
+```
 ---
 
 TODO:

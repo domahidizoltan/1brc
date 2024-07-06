@@ -85,12 +85,35 @@ func BenchmarkProcessMeasurements(b *testing.B) {
 	res := map[string]measurement{}
 
 	for i := 0; i < b.N; i++ {
-		lines := `gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.2
-			test;1.0
-			gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.0
-			test;2.0
-			gsheGuyuanRui’anKhulnaMuscatWenlingGaoz;9.1`
+		lines := `qwerty;9.2
+            test;1.0
+            qwerty;9.0
+            test;2.0
+            asdfg;9.1
+            zxcvb;1.1
+            qwerty;2.2
+            asdfg;3.3
+            asd;3.4
+            qwe;3.4
+            tes;3.4
+            qwerty;5.5`
 		res = processMeasurements(lines)
+	}
+	_ = res
+}
+
+func BenchmarkGetResult(b *testing.B) {
+	b.ReportAllocs()
+	measurements := map[string]measurement{
+		"qwerty": {1.0, 2.0, 30, 2},
+		"test":   {2.0, 3.0, 50, 2},
+		"asdfg":  {3.0, 4.0, 70, 2},
+		"zxcvb":  {4.0, 5.0, 90, 2},
+	}
+
+	var res string
+	for i := 0; i < b.N; i++ {
+		res = getResult(measurements)
 	}
 	_ = res
 }

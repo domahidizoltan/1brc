@@ -20,12 +20,12 @@ type measurement struct {
 }
 
 const (
-	resFormat = "%s=%.1f/%.1f/%.1f"
+	maxStations = 10000
 )
 
 var (
 	maxMeasurementWorkers = runtime.NumCPU()
-	fileLinesBufferSize   = runtime.NumCPU() * 10000
+	fileLinesBufferSize   = runtime.NumCPU() * maxStations
 	chunksBufferSize      = 200
 
 	l3CacheSize = 4 * 1024 * 1024
@@ -91,7 +91,7 @@ func getMeasurements(fileSize int64) map[string]measurement {
 	}
 
 	doneCh := make(chan struct{})
-	measurements := make(map[string]measurement, 10000)
+	measurements := make(map[string]measurement, maxStations)
 	go func(workerMeasurementsCh chan map[string]measurement) {
 		for workerResults := range workerMeasurementsCh {
 			for station, mes := range workerResults {
@@ -125,7 +125,7 @@ func getMeasurements(fileSize int64) map[string]measurement {
 		leftoverLines[j] = string(line)
 	}
 
-	for station, m := range processMeasurementsFunc(strings.Join(leftoverLines, "\n")) {
+	for station, m := range processMeasurements(strings.Join(leftoverLines, "\n")) {
 		if v, ok := measurements[station]; !ok {
 			measurements[station] = m
 		} else {
@@ -152,7 +152,7 @@ func readAndProcessFile(idx int, width int64, leftovers [][]byte, workerMeasurem
 		panic(err)
 	}
 
-	measurements := make(map[string]measurement, 1000)
+	measurements := make(map[string]measurement, maxStations)
 	tmpLine := []byte(nil)
 	buf := make([]byte, l3CacheSize-1024)
 
@@ -217,17 +217,14 @@ func readAndProcessFile(idx int, width int64, leftovers [][]byte, workerMeasurem
 	wg.Done()
 }
 
-var processMeasurementsFunc func(string) map[string]measurement = processMeasurements
-
 func processMeasurements(chunk string) map[string]measurement {
-	measurements := make(map[string]measurement, 100)
 	lines := strings.Split(chunk, "\n")
-	for _, line := range lines {
-		idx := strings.Index(line, ";")
-		tokens := [2]string{line[:idx], line[idx+1:]}
+	allocSize := min(len(lines), maxStations)
+	measurements := make(map[string]measurement, allocSize)
 
-		station := tokens[0]
-		t, err := strconv.ParseFloat(tokens[1], 64)
+	for _, line := range lines {
+		station, tempStr, _ := strings.Cut(line, ";")
+		t, err := strconv.ParseFloat(tempStr, 64)
 		if err != nil {
 			panic(err)
 		}
@@ -254,12 +251,41 @@ func getResult(measurements map[string]measurement) string {
 	}
 	slices.Sort(stations)
 
-	res := make([]string, 0, len(stations))
-	for _, station := range stations {
-		mes := measurements[string(station)]
-		res = append(res, fmt.Sprintf(resFormat, station, mes.min, avg(mes), mes.max))
+	formatFloat := func(builder *strings.Builder, f float64) {
+		if f < 0 {
+			builder.WriteString("-")
+			f = -f
+		}
+
+		i := int(f * 10.0)
+		builder.WriteString(strconv.Itoa(i / 10))
+		builder.WriteString(".")
+		builder.WriteString(strconv.Itoa(i % 10))
 	}
-	return fmt.Sprintf("{%s}", strings.Join(res, ", "))
+
+	var builder strings.Builder
+	builder.Grow(2 + len(stations)*122)
+	builder.WriteString("{")
+
+	lastIdx := len(stations) - 1
+	for i, station := range stations {
+		mes := measurements[station]
+
+		builder.WriteString(station)
+		builder.WriteString("=")
+		formatFloat(&builder, mes.min)
+		builder.WriteString("/")
+		formatFloat(&builder, avg(mes))
+		builder.WriteString("/")
+		formatFloat(&builder, mes.max)
+
+		if i != lastIdx {
+			builder.WriteString(", ")
+		}
+	}
+
+	builder.WriteString("}")
+	return builder.String()
 }
 
 func avg(mes measurement) float64 {
