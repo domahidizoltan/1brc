@@ -119,7 +119,7 @@ My solution steps:
 | 5    | Use L3 size chunks                     | 93s<br/>(M1: 16s)   | 1.806x<br/>(M1: 4.25x)  | 3.075x<br/>(M1: 10.437x) | [2668364](https://github.com/domahidizoltan/1brc/blob/26683641033be126604a0af5cc63692b4d46b3d4/main.go) |
 | 6    | Refactor to parallel read and process  | 100s<br/>(M1: 17s)  | 0.930x<br/>(M1: 0.941x) | 2.860x<br/>(M1: 9.823x)  | [b0fac51](https://github.com/domahidizoltan/1brc/blob/b0fac51726f790a021e94de8488aca87b56e4605/main.go) |
 | 7    | Optimize map allocation for processing | 97s<br/>(M1: 16s)   | 1.031x<br/>(M1: 1.062x) | 2.948x<br/>(M1: 10.437x) | [6ba10e5](https://github.com/domahidizoltan/1brc/blob/6ba10e5fbc720a6d303be728cdbacc3625504fc0/main.go) |
-| 8    | PGO and GC tuning                      | 86s<br/>(M1: 15s)   | 1.128x<br/>(M1: 1.066x) | 3.325x<br/>(M1: 11.133x) |                                                                                                         |
+| 8    | PGO and GC tuning                      | 86s<br/>(M1: 15s)   | 1.128x<br/>(M1: 1.066x) | 3.325x<br/>(M1: 11.133x) | [14b9f35](https://github.com/domahidizoltan/1brc/blob/14b9f35ff9e8cfd20a4e0ace1bf9807e591cd1a1/main.go) |
 
 Comments for the steps:  
   1. *Naive approach*: Sequential file read and processing using 1 CPU core.  
@@ -215,8 +215,12 @@ Main-4          53023.0 ± 0%   125.0 ± 2%  -99.76% (p=0.002 n=6)
 
 ---
 
+Out of curiosity I solved the same problem with GitHub Copilot. I tried to give the description from the [1brc challenge GitHub page](https://github.com/gunnarmorling/1brc) with as small change as possible. The generated codes were working and they needed just tiny modifications regarding to the output formatting and mean calculation (I had this issue as well so I basically copied my version). They were ready to run within a couple of minutes.  
+- The first generated code (as the most suggestions) was single threaded. It ran for 424 seconds (148s on M1).  
+- For the second version I tried to pick a suggestion what tried to use some concurrency. It used around 2.5-3 CPU cores but it used up all the system memory and stopped responding after nearly 15 minutes (finnished running on M1 in 443s).
+
+
 TODO:
-- Compare implementation created by GitHub Copilot
 
 - Extra task: implement measurements.txt file generator  
 Reference execution time: create_measurements3.sh -> `Wrote 1,000,000,000 measurements in 267,667 ms`

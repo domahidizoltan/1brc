@@ -12,6 +12,13 @@ run-tuned:
 	tail -n1 tmp.txt
 	rm 1brc tmp.txt
 
+run-copilot:
+	go build -o 1brc copilot/second/main.go
+	./1brc withTime > tmp.txt
+	head -n1 tmp.txt > averages.txt
+	tail -n1 tmp.txt
+	rm 1brc tmp.txt
+
 use-1b:
 	ln -fs files/measurements_1B.txt measurements.txt
 
