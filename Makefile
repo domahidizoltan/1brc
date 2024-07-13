@@ -55,3 +55,13 @@ bench:
 #golang.org/x/perf/cmd/benchstat@latest
 benchstat:
 	benchstat stats.txt stats.old.txt
+
+rows=1000000
+run-generate:
+	@(cd generator && go run generator.go $(rows))
+	@mv generator/measurements.txt measurements.txt
+
+profile-generate:
+	rm -f /tmp/profile.* /tmp/trace.out
+	(cd generator && go test -bench BenchmarkMain -cpu=4 -benchtime 1x -cpuprofile=/tmp/profile.cpu.out -memprofile=/tmp/profile.mem.out -blockprofile=/tmp/profile.block.out -v -trace=/tmp/trace.out)
+

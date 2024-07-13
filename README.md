@@ -218,9 +218,5 @@ Main-4          53023.0 ± 0%   125.0 ± 2%  -99.76% (p=0.002 n=6)
 Out of curiosity I solved the same problem with GitHub Copilot. I tried to give the description from the [1brc challenge GitHub page](https://github.com/gunnarmorling/1brc) with as small change as possible. The generated codes were working and they needed just tiny modifications regarding to the output formatting and mean calculation (I had this issue as well so I basically copied my version). They were ready to run within a couple of minutes.  
 - The first generated code (as the most suggestions) was single threaded. It ran for 424 seconds (148s on M1).  
 - For the second version I tried to pick a suggestion what tried to use some concurrency. It used around 2.5-3 CPU cores but it used up all the system memory and stopped responding after nearly 15 minutes (finnished running on M1 in 443s).
-
-
-TODO:
-
-- Extra task: implement measurements.txt file generator  
-Reference execution time: create_measurements3.sh -> `Wrote 1,000,000,000 measurements in 267,667 ms`
+  
+I also wrote the measurement file generator but my logic behind generating measurements was not that sophisticated like the original one. On my machine I could reduce the generation time to 1:46 min compared to 4:27 min used by `create_measurements3.sh`. It was interesting that the same code was running totally different on M1. On my machine the threads were busy and didn't had to wait much for scheduling goroutines (used ~360% cpu), but on M1 this was much worse (used ~510% cpu). Because of this on M1 my multithreaded version was slower (2:40) compared to the single threaded original version (2:09). (I leave here a TODO to investigate and improve this).  
